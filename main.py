@@ -1,7 +1,9 @@
 from fastapi import FastAPI,HTTPException
 from contextlib import asynccontextmanager
 from pathlib import Path
+from fastapi.responses import StreamingResponse
 
+from groq_ai import chat_with_me
 
 @asynccontextmanager
 async def lifespan(app:FastAPI):
@@ -35,4 +37,15 @@ def parse_resume(file_path):
 
 @app.get("/")
 def home():
-    return app.state.resume_json
+    return "welcome"
+
+@app.post("/chat")
+async def chat_stream(request:str):
+    return StreamingResponse(
+        chat_with_me(
+            user_message=request,
+            resume_full=app.state.resume_text,
+            resume_json=app.state.resume_json
+        ),
+        media_type="text/plain"
+    )
