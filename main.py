@@ -44,7 +44,6 @@ async def chat_stream(request:str):
     return StreamingResponse(
         chat_with_me(
             user_message=request,
-            resume_full=app.state.resume_text,
             resume_json=app.state.resume_json
         ),
         media_type="text/plain"

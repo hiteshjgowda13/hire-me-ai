@@ -1,11 +1,15 @@
-from main import app
 from pydantic import BaseModel
 from model_config import client,model
+import os
+import json
+from urllib.request import Request,urlopen
+from urllib.parse import urlencode
 
 
 #tool for groq which stores only resume text fall back to this if question asked  cannot be asked from json format
 def only_text() -> str:
     """this function is a tool use it for getting the text of resume it contains evrything about the user's resume"""
+    from main import app
     return app.state.resume_text
 
 
@@ -92,3 +96,93 @@ def parse_resume_json_using_ai(resume_text):
     resume = Resume(**data)
 
     return resume
+
+
+# simple webscrapper for getting acess of my repos
+def _github_get(url:str):
+    token = os.getenv("GITHUB_TOKEN")
+# request headers sending for the scrapping to work
+    headers ={
+        "Accept":"application/vnd.github+json",
+        "X-Github-Api-Version":"2022-11-28",
+        "user-agent":"hire-me-ai"
+    }
+
+    if token:
+        headers["Authorization"] =f"Bearer {token}"
+    
+    req= Request(url,headers=headers)
+    with urlopen(req,timeout=20)as resp:
+        return json.loads(resp.read().decode('utf-8'))
+
+
+# function of getting public repos from abv func
+def list_public_projects() -> list[dict]:
+    username = os.getenv("GITHUB_USERNAME")
+
+    if not username:
+        raise ValueError("github username missing")
+
+    all_projects =[]
+    # simple pagination
+    page =1 
+    per_page=100
+    # looping till end of page
+    while True:
+        query = urlencode({
+            "per_page":per_page,
+            "page":page,
+            "type":"owner"
+        })
+        url = f"https://api.github.com/users/{username}/repos?{query}"
+        repos = _github_get(url)
+
+        #no more repos to get so empty repos ie none so break and exit
+        if not repos:
+            break
+
+        for repo in repos:
+            if not repo.get("private",False):
+                all_projects.append({
+                    "project_name":repo.get("name",""),
+                    "description":repo.get("description")
+                })
+        if len(repos) <per_page:
+            break
+        page +=1
+
+    return all_projects
+
+def get_project_details(project_name:str) -> dict:
+    username = os.getenv("GITHUB_USERNAME")
+    if not username:
+        raise ValueError("github username_missing")
+
+    repo = _github_get(f"https://api.github.com/repos/{username}/{project_name}")
+
+    if repo.get("private",False):
+        return {"error":"project is private not visible for public view"}
+
+
+    langs = _github_get(repo["languages_url"])
+
+    readme_text =""
+
+    try:
+        readme = _github_get(f"https://api.github.com/repos/{username}/{project_name}/readme")
+        import base64
+        if readme.get("encoding") == "base64" and readme.get("content"):
+            readme_text = base64.b64decode(readme["content"]).decode("utf-8",errors="ignore")[:4000]
+    except Exception:
+        readme_text=""
+
+    return {
+        "project_name": repo.get("name", ""),
+        "description": repo.get("description") or "No description",
+        "homepage": repo.get("homepage") or "",
+        "topics": repo.get("topics") or [],
+        "languages": langs,
+        "stars": repo.get("stargazers_count", 0),
+        "forks": repo.get("forks_count", 0),
+        "readme_excerpt": readme_text
+    }
