@@ -8,7 +8,7 @@ const suggestions = document.getElementById("suggestions");
 const API_BASE =
   window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
     ? "http://127.0.0.1:8000"
-    : "https://your-backend-domain.com";
+    : "https://hire-me-ai-f66k.onrender.com";
 
 let isStreaming = false;
 
