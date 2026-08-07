@@ -137,11 +137,11 @@ You have access to tools for retrieving dynamic or deep information. Use them ap
     while True:
         try:
             resp = client.chat.completions.create(
-                model=model, messages=messages, tools=tool_defs, tool_choice="auto"
+                model=model, messages=messages, tools=tool_defs, tool_choice="auto",temperature=0.2,max_tokens=350
             )
             msg = resp.choices[0].message
             tool_calls = getattr(msg, "tool_calls", None)
-            time.sleep(1)
+            # time.sleep(1)
 
             if not tool_calls:
                 # since tool call is not needed query is not asking for tools so return normal answer
