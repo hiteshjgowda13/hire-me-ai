@@ -58,7 +58,7 @@ frontend/               Static chat UI (index.html, style.css, script.js)
 
 ## Live Demo
 
-(link to be added after deployment)
+[https://hire-me-ai-psi.vercel.app/](https://hire-me-ai-psi.vercel.app/)
 
 ## Attribution
 
