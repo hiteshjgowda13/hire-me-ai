@@ -118,6 +118,9 @@ def _github_get(url:str):
 
 # function of getting public repos from abv func
 def list_public_projects() -> list[dict]:
+    """tool for llm: use this when you need to acess all projects of Hitesh's project 
+        this project also include whatever is mentinoned in resume too
+        therefore list all projects means get projects in github """
     username = os.getenv("GITHUB_USERNAME")
 
     if not username:
@@ -154,6 +157,11 @@ def list_public_projects() -> list[dict]:
     return all_projects
 
 def get_project_details(project_name:str) -> dict:
+    """
+    when query is asking about specific project use this tool
+    and give a detail explanation using readme_excerpt,
+    lamguages used give a overwiew
+    """
     username = os.getenv("GITHUB_USERNAME")
     if not username:
         raise ValueError("github username_missing")
