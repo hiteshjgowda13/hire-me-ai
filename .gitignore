@@ -10,4 +10,6 @@ wheels/
 .venv
 
 .env
-uv.lock
+
+resume_cache.json
+

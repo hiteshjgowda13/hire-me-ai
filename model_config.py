@@ -12,4 +12,4 @@ if not groq_api_key:
 
 client = Groq()
 
-model ="openai/gpt-oss-120b"
+model ="llama-3.3-70b-versatile"

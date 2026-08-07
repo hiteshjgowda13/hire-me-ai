@@ -1,5 +1,5 @@
 from model_config import client, model
-
+from groq import RateLimitError, BadRequestError, APIError
 # from main import app
 import json
 
@@ -22,7 +22,7 @@ tool_defs = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "project_name:": {
+                    "project_name": {
                         "type": "string",
                         "description": "exact name of the project which is same as github_repo name",
                     }
@@ -43,13 +43,15 @@ tool_defs = [
 
 
 def _run_tool(name: str, args: dict):
-    if name == "list_public_projects":
-        return list_public_projects()
-    if name == "get_project_details":
-        return get_project_details(args["project_name"])
-    if name == "only_text":
-        return only_text()
-    return {"error": f"unknown tool {name}"}
+    try:
+        if name == "list_public_projects":
+            return list_public_projects()
+        if name == "get_project_details":
+            return get_project_details(args["project_name"])
+        if name == "only_text":
+            return only_text()
+    except Exception as e:
+        return {"error": str(e)}
 
 
 import time
@@ -108,10 +110,10 @@ You have access to tools for retrieving dynamic or deep information. Use them ap
 #### **B. GitHub & Project Tools:**
 1. **Listing All Projects:**
    When asked to list all projects or repositories, call the GitHub repository tool to retrieve all projects. Format the output consistently as follows:
-   
+   for overview use the readme.md file and create a summary and give
    * **Serial No:** [Number]
    * **Project Name / Repo Name:** [Name]
-   * **Overview:** [Concise summary of the project]
+   * **Overview:** [Concise summary of the project from readme]
    * **Languages & Frameworks:** [Tech stack extracted from README/metadata]
 
 2. **Specific Project Inquiries:**
@@ -131,44 +133,58 @@ You have access to tools for retrieving dynamic or deep information. Use them ap
     ]
 
     while True:
-        resp = client.chat.completions.create(
-            model=model, messages=messages, tools=tool_defs, tool_choice="auto"
-        )
-        msg = resp.choices[0].message
-        tool_calls = getattr(msg, "tool_calls", None)
-        time.sleep(1)
-        if not tool_calls:
-            # since tool call is not needed query is not asking for tools so return normal answer
-            final_stream = client.chat.completions.create(
-                model=model, messages=messages, stream=True
+        try:
+            resp = client.chat.completions.create(
+                model=model, messages=messages, tools=tool_defs, tool_choice="auto"
             )
+            msg = resp.choices[0].message
+            tool_calls = getattr(msg, "tool_calls", None)
+            time.sleep(1)
 
-            for chunk in final_stream:
-                content = chunk.choices[0].delta.content
-                if content:
-                    yield content
-            return
-        messages.append(
-            {
-                "role": "assistant",
-                "content": msg.content or "",
-                "tool_calls": [
-                    tc.model_dump() if hasattr(tc, "model_dump") else tc
-                    for tc in tool_calls
-                ],
-            }
-        )
+            if not tool_calls:
+                # since tool call is not needed query is not asking for tools so return normal answer
+                final_stream = client.chat.completions.create(
+                    model=model, messages=messages, stream=True
+                )
 
-        for tc in tool_calls:
-            fn_name = tc.function.name
-            fn_args = json.loads(tc.function.arguments or "{}")
-            result = _run_tool(fn_name, fn_args)
+                for chunk in final_stream:
+                    content = chunk.choices[0].delta.content
+                    if content:
+                        yield content
+                return
 
             messages.append(
                 {
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "name": fn_name,
-                    "content": json.dumps(result),
+                    "role": "assistant",
+                    "content": msg.content or "",
+                    "tool_calls": [
+                        tc.model_dump() if hasattr(tc, "model_dump") else tc
+                        for tc in tool_calls
+                    ],
                 }
             )
+
+            for tc in tool_calls:
+                fn_name = tc.function.name
+                fn_args = json.loads(tc.function.arguments or "{}")
+                result = _run_tool(fn_name, fn_args)
+
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "name": fn_name,
+                        "content": json.dumps(result),
+                    }
+                )
+        except RateLimitError:
+            yield "I'm getting rate-limited right now — please wait a few seconds and try again."
+            return
+        except BadRequestError as e:
+            print(f"[chat_with_me] BadRequestError: {e}")
+            yield "Sorry, I hit an issue processing that request. Could you try rephrasing it?"
+            return
+        except APIError as e:
+            print(f"[chat_with_me] APIError: {e}")
+            yield "Sorry, something went wrong talking to the AI service. Please try again."
+            return

@@ -59,7 +59,7 @@ def parse_resume_json_using_ai(resume_text):
     Skills may also appear in the skills section, work experience,
     internships or projects.
 
-    Return ONLY valid JSON matching this schema:
+    Return ONLY a single valid JSON object (not a list/array) matching this schema:
 
     {resume_schema}
 
@@ -70,6 +70,7 @@ def parse_resume_json_using_ai(resume_text):
     3. If a list has no information, return an empty list.
     4. Include internships inside experiences.
     5. Extract skills mentioned across the entire resume.
+    6. The top-level output must be a JSON object with these exact keys, never a bare array.
     """
 
     user_prompt = f"""
@@ -89,13 +90,26 @@ def parse_resume_json_using_ai(resume_text):
     response_format ={
         "type":"json_object"
     }
-    response = client.chat.completions.create(model=model,messages=messages,temperature=0,response_format=response_format)
+    attempts = 4
+    for attempt in range(1, attempts + 1):
+        response = client.chat.completions.create(model=model,messages=messages,temperature=0,response_format=response_format)
+        raw_output = response.choices[0].message.content
+        data = json.loads(raw_output)
 
-    raw_output = response.choices[0].message.content
-    data = json.loads(raw_output)
-    resume = Resume(**data)
+        if isinstance(data, list) and len(data) == 1 and isinstance(data[0], dict):
+            data = data[0]
 
-    return resume
+        if isinstance(data, dict):
+            return Resume(**data)
+
+        if attempt == attempts:
+            raise ValueError(f"resume parser returned {type(data).__name__} instead of a JSON object after {attempts} attempts")
+
+        messages.append({"role": "assistant", "content": raw_output})
+        messages.append({
+            "role": "user",
+            "content": "That was a JSON array, not an object. Re-send ONLY a single JSON object matching the schema — no array wrapper.",
+        })
 
 
 # simple webscrapper for getting acess of my repos
